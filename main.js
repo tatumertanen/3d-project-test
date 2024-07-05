@@ -1,125 +1,200 @@
 import './style.css'
 import * as THREE from 'three'
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
+import { FontLoader } from 'three/addons/loaders/FontLoader.js'
+import { TextGeometry } from 'three/addons/geometries/TextGeometry.js'
 
 let scene, camera, renderer, player, track, score = 0
-const gates = []
-const playerSpeed = 0.1
+const checkpoints = []
+const playerSpeed = 0.15
 const trackLength = 1000
-const gateInterval = 20
+const checkpointInterval = 20
+let playerVelocity = new THREE.Vector3()
 
 function init() {
-scene = new THREE.Scene()
-camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
-renderer = new THREE.WebGLRenderer()
-renderer.setSize(window.innerWidth, window.innerHeight)
-document.querySelector('#app').appendChild(renderer.domElement)
+  scene = new THREE.Scene()
+  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
+  renderer = new THREE.WebGLRenderer()
+  renderer.setSize(window.innerWidth, window.innerHeight)
+  renderer.setClearColor(0xb6b8cc)
+  document.querySelector('#app').appendChild(renderer.domElement)
 
-const controls = new OrbitControls(camera, renderer.domElement)
-controls.enableDamping = true
-controls.dampingFactor = 0.25
-controls.enableZoom = false
+  createTrack()
+  createPlayer()
+  createCheckpoints()
 
-createTrack()
-createPlayer()
-createGates()
+  camera.position.set(0, 6, -15)
+  camera.lookAt(player.position)
 
-camera.position.set(0, 5, -10)
-camera.lookAt(player.position)
+  window.addEventListener('resize', onWindowResize, false)
+  document.addEventListener('keydown', onKeyDown, false)
+  document.addEventListener('keyup', onKeyUp, false)
 
-window.addEventListener('resize', onWindowResize, false)
-document.addEventListener('keydown', onKeyDown, false)
-
-animate()
+  animate()
 }
 
 function createTrack() {
-const geometry = new THREE.BoxGeometry(10, 1, trackLength)
-const material = new THREE.MeshBasicMaterial({ color: 0x808080 })
-track = new THREE.Mesh(geometry, material)
-track.position.set(0, -0.5, trackLength / 2)
-scene.add(track)
+  const geometry = new THREE.BoxGeometry(10, 1, trackLength)
+  const material = new THREE.MeshBasicMaterial({ color: 0x44557a })
+  track = new THREE.Mesh(geometry, material)
+  track.position.set(0, -0.5, trackLength / 2)
+  scene.add(track)
 }
 
 function createPlayer() {
-const geometry = new THREE.BoxGeometry(1, 1, 1)
-const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 })
-player = new THREE.Mesh(geometry, material)
-player.position.set(0, 0.5, 0)
-scene.add(player)
+  const geometry = new THREE.BoxGeometry(1, 1, 1)
+  const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 })
+  player = new THREE.Mesh(geometry, material)
+  player.position.set(0, 0.5, 0)
+  scene.add(player)
 }
 
-function createGates() {
-for (let i = gateInterval; i < trackLength; i += gateInterval) {
-const gate = createGate(i)
-gates.push(gate)
-scene.add(gate)
-}
+function createCheckpoints() {
+  for (let i = checkpointInterval; i < trackLength; i += checkpointInterval) {
+    const checkpoint = createCheckpoint(i)
+    checkpoints.push(checkpoint)
+    scene.add(checkpoint)
+  }
 }
 
-function createGate(position) {
-const geometry = new THREE.BoxGeometry(10, 5, 0.5)
-const material = new THREE.MeshBasicMaterial({ color: Math.random() * 0xffffff })
-const gate = new THREE.Mesh(geometry, material)
-gate.position.set(0, 2.5, position)
-gate.userData = {
-effect: Math.random() < 0.5 ? 'add' : 'multiply',
-value: Math.random() < 0.5 ? 50 : 2
+function createCheckpoint(position) {
+  const checkpointGroup = new THREE.Group()
+  checkpointGroup.position.set(0, 2.5, position)
+
+  const leftGate = createGate(-2.5, 0xff0000)
+  const rightGate = createGate(2.5, 0x0000ff)
+
+  checkpointGroup.add(leftGate)
+  checkpointGroup.add(rightGate)
+
+  checkpointGroup.userData = {
+    leftEquation: generateEquation(),
+    rightEquation: generateEquation()
+  }
+
+  const loader = new FontLoader()
+  loader.load('poppins.json', (font) => {
+  })
 }
-return gate
+
+
+
+function createGate(xPosition, color, equation) {
+  const geometry = new THREE.BoxGeometry(5, 5, 0.5)
+  const material = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.5 })
+  const gate = new THREE.Mesh(geometry, material)
+  gate.position.set(xPosition, 0, 0)
+
+  const formattedEquation = formatEquation(equation)
+  const textGeometry = new THREE.TextGeometry(formattedEquation, {
+    font: font,
+    size: 0.5,
+    height: 0.1,
+  })
+
+  const textMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 })
+  const textMesh = new THREE.Mesh(textGeometry, textMaterial)
+  textMesh.rotation.y = Math.PI
+  gate.add(textMesh)
+
+  return gate
+}
+
+function formatEquation(equation) {
+
+  return `${equation.operator}${equation.value}`
+}
+
+function generateEquation() {
+  const operators = ['+', '-', '*', '/']
+  const operator = operators[Math.floor(Math.random() * operators.length)]
+  const value = Math.floor(Math.random() * 10) + 1
+  return { operator, value }
 }
 
 function onWindowResize() {
-camera.aspect = window.innerWidth / window.innerHeight
-camera.updateProjectionMatrix()
-renderer.setSize(window.innerWidth, window.innerHeight)
+  camera.aspect = window.innerWidth / window.innerHeight
+  camera.updateProjectionMatrix()
+  renderer.setSize(window.innerWidth, window.innerHeight)
 }
 
 function onKeyDown(event) {
-switch (event.keyCode) {
-case 37: // left arrow
-if (player.position.x > -4) player.position.x -= 1
-break
-case 39: // right arrow
-if (player.position.x < 4) player.position.x += 1
-break
+  switch (event.key.toLowerCase()) {
+    case 'a':
+      playerVelocity.x = -playerSpeed
+      break
+    case 'd':
+      playerVelocity.x = playerSpeed
+      break
+  }
 }
+
+function onKeyUp(event) {
+  switch (event.key.toLowerCase()) {
+    case 'a':
+      break
+  }
 }
 
 function animate() {
-requestAnimationFrame(animate)
+  requestAnimationFrame(animate)
 
-player.position.z += playerSpeed
-camera.position.z = player.position.z - 10
+  player.position.add(playerVelocity)
+  player.position.x = Math.max(-4, Math.min(4, player.position.x))
+  player.position.z += playerSpeed
+  updateCameraPosition()
 
-checkGateCollisions()
+  checkCheckpointCollisions()
 
-if (player.position.z >= trackLength) {
-alert(`Game Over! Final Score: ${score}`)
-player.position.z = 0
-score = 0
+  if (player.position.z >= trackLength) {
+    alert(`Game Over! Final Score: ${score}`)
+    player.position.z = 0
+    score = 0
+  }
+
+  updateScoreDisplay()
+  renderer.render(scene, camera)
 }
 
-updateScoreDisplay()
-renderer.render(scene, camera)
+function updateCameraPosition() {
+  const cameraOffset = new THREE.Vector3(0, 6, -15)
+  camera.position.copy(player.position).add(cameraOffset)
+  camera.lookAt(player.position)
 }
 
-function checkGateCollisions() {
-for (const gate of gates) {
-if (Math.abs(player.position.z - gate.position.z) < 0.5 &&
-Math.abs(player.position.x - gate.position.x) < 5) {
-if (gate.userData.effect === 'add') {
-score += gate.userData.value
-} else {
-score *= gate.userData.value
+function checkCheckpointCollisions() {
+  for (const checkpoint of checkpoints) {
+
+
+    if (Math.abs(player.position.z - checkpoint.position.z) < 0.5) {
+
+
+
+      // Collision logic here
+    } else {
+      checkpoint.position.y = -10; // Move checkpoint out of view
+    }
+  }
 }
-gate.position.y = -10; // Move gate out of view
-}
-}
+
+function applyEquation(equation) {
+  switch (equation.operator) {
+    case '+':
+      score += equation.value
+      break
+    case '-':
+      score -= equation.value
+      break
+    case '*':
+      score *= equation.value
+      break
+    case '/':
+      score = Math.floor(score / equation.value)
+      break
+  }
 }
 
 function updateScoreDisplay() {
-document.getElementById('score').innerText = `Score: ${score}`
+  document.getElementById('score').innerText = `Score: ${score}`
 }
 
 init()
